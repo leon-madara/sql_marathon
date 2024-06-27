@@ -121,13 +121,137 @@ WHERE rnk = 1
 
 
 
+# Query #2
+Generate a report to showcase the period of presence and absence for each employee as demonstrated in the expected output
+
+The Input 
+
+![amazonsql1](https://github.com/leon-madara/sql_marathon/assets/147078093/403d2719-1d2e-4145-b849-3e483a1e14e9)
+
+The Expected Output
+
+![amazonsql2](https://github.com/leon-madara/sql_marathon/assets/147078093/05cd4f90-b1fb-4295-8eb3-c5eeea3ce4bd)
+
+## The first step
+to create the table and insert the values
+
+```sql
+CREATE TABLE attendance (
+    employee_id VARCHAR(3),
+    input_date DATE,
+    status VARCHAR(7)
+);
 
 
+INSERT INTO attendance (employee_id, input_date, status) VALUES
+('A1', '2024-01-01', 'PRESENT'),
+('A1', '2024-01-02', 'PRESENT'),
+('A1', '2024-01-03', 'PRESENT'),
+('A1', '2024-01-04', 'PRESENT'),
+('A1', '2024-01-05', 'ABSENT'),
+('A1', '2024-01-06', 'PRESENT'),
+('A1', '2024-01-07', 'ABSENT'),
+('A1', '2024-01-08', 'PRESENT'),
+('A2', '2024-01-06', 'PRESENT'),
+('A2', '2024-01-07', 'PRESENT'),
+('A2', '2024-01-08', 'PRESENT'),
+('A2', '2024-01-10', 'ABSENT');
+```
 
+## The final code
 
+To create a window function (cte) with row number
 
+```sql
+WITH cte AS (
+    SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY employee_id ORDER BY input_date) AS rn
+    FROM attendance
+),
+cte_present AS (
+    SELECT *,
+           rn - ROW_NUMBER() OVER (PARTITION BY employee_id ORDER BY input_date) AS flag
+    FROM cte
+    WHERE status = 'PRESENT'
+),
+cte_absent AS (
+    SELECT *,
+           rn - ROW_NUMBER() OVER (PARTITION BY employee_id ORDER BY input_date) AS flag
+    FROM cte
+    WHERE status = 'ABSENT'
+)
+SELECT employee_id,
+       FIRST_VALUE(input_date) OVER (PARTITION BY employee_id, flag ORDER BY input_date) AS FROM_DATE,
+       LAST_VALUE(input_date) OVER (PARTITION BY employee_id, flag ORDER BY input_date
+           RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS TO_DATE,
+       status
+FROM cte_present
+UNION
+SELECT employee_id,
+       FIRST_VALUE(input_date) OVER (PARTITION BY employee_id, flag ORDER BY input_date) AS FROM_DATE,
+       LAST_VALUE(input_date) OVER (PARTITION BY employee_id, flag ORDER BY input_date
+           RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS TO_DATE,
+       status
+FROM cte_absent;
+```
 
+###
+1. First code
 
+```sql
+WITH cte AS (
+    SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY employee_id ORDER BY input_date) AS rn
+    FROM attendance
+),
+```
+
+This code uses a window function (CTE) to create a row number to rank the output
+
+2. Second part of the code: Present Values
+
+```sql
+cte_present AS (
+    SELECT *,
+           rn - ROW_NUMBER() OVER (PARTITION BY employee_id ORDER BY input_date) AS flag
+    FROM cte
+    WHERE status = 'PRESENT'
+),
+```
+
+It creates another window function (cte_present) over the newly selected one WHERE status is PRESENT
+
+3. The third part of the code: Absent Values
+
+```sql
+cte_absent AS (
+    SELECT *,
+           rn - ROW_NUMBER() OVER (PARTITION BY employee_id ORDER BY input_date) AS flag
+    FROM cte
+    WHERE status = 'ABSENT'
+)
+```
+
+It uses the first_value and last_value, including the *CLAUSE* **RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING** to 
+
+3. It uses a **UNION** CLAUSE to merge the output from the two window functions
+
+```sql
+SELECT employee_id,
+       FIRST_VALUE(input_date) OVER (PARTITION BY employee_id, flag ORDER BY input_date) AS FROM_DATE,
+       LAST_VALUE(input_date) OVER (PARTITION BY employee_id, flag ORDER BY input_date
+           RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS TO_DATE,
+       status
+FROM cte_present
+UNION
+SELECT employee_id,
+       FIRST_VALUE(input_date) OVER (PARTITION BY employee_id, flag ORDER BY input_date) AS FROM_DATE,
+       LAST_VALUE(input_date) OVER (PARTITION BY employee_id, flag ORDER BY input_date
+           RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS TO_DATE,
+       status
+FROM cte_absent
+```
+End
 
 
 
